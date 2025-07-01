@@ -33,5 +33,6 @@ struct Token{
 };
 
 std::vector<Token> tokenize(const std::string& input);
+std::vector<Token> toPostfix(const std::vector<Token>& tokens);
 
 #endif
