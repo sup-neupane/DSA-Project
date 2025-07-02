@@ -2,6 +2,9 @@
 #include <vector>
 #include <cctype>   // for isdigit, isalpha, isspace
 #include <iostream> // for std::cerr
+#include <algorithm>
+#include <stack> // for AST building
+#include <regex> 
 
 // Tokenizer
 std::vector<Token> tokenize(const std::string& input) {
@@ -96,16 +99,19 @@ std::vector<Token> toPostfix(const std::vector<Token>& tokens) {
     std::vector<Token> output;
     std::vector<Token> opStack;
 
+    std::vector<int> argCountStack; // Tracks function argument counts
+
     for (size_t i = 0; i < tokens.size(); ++i) {
         const Token& token = tokens[i];
 
         if (token.type == TokenType::NUMBER || token.type == TokenType::IDENTIFIER) {
-            // If IDENTIFIER followed by LPAREN → function
+            // Function name → push to stack
             if (token.type == TokenType::IDENTIFIER &&
                 i + 1 < tokens.size() && tokens[i + 1].type == TokenType::LPAREN) {
-                opStack.push_back(token); // function name to stack
+                opStack.push_back(token);      // Function name
+                argCountStack.push_back(0);    // Start counting args
             } else {
-                output.push_back(token);
+                output.push_back(token);       // Number or variable
             }
         }
 
@@ -113,6 +119,9 @@ std::vector<Token> toPostfix(const std::vector<Token>& tokens) {
             while (!opStack.empty() && opStack.back().type != TokenType::LPAREN) {
                 output.push_back(opStack.back());
                 opStack.pop_back();
+            }
+            if (!argCountStack.empty()) {
+                argCountStack.back() += 1;
             }
         }
 
@@ -140,22 +149,27 @@ std::vector<Token> toPostfix(const std::vector<Token>& tokens) {
                 output.push_back(opStack.back());
                 opStack.pop_back();
             }
+
             if (opStack.empty()) {
                 std::cerr << "Error: Mismatched parentheses.\n";
                 return {};
             }
-            opStack.pop_back(); // remove LPAREN
 
-            // If function name is on top, pop to output
+            opStack.pop_back(); // pop LPAREN
+
+            // If there was a function before LPAREN, pop and annotate
             if (!opStack.empty() && opStack.back().type == TokenType::IDENTIFIER) {
-                output.push_back(opStack.back());
+                std::string funcName = opStack.back().value;
+                int argCount = (argCountStack.empty() ? 0 : argCountStack.back() + 1); // count commas + 1
+                if (!argCountStack.empty()) argCountStack.pop_back();
                 opStack.pop_back();
+
+                output.push_back(Token(TokenType::IDENTIFIER, funcName + "@" + std::to_string(argCount)));
             }
         }
 
         else if (token.type == TokenType::EQUAL) {
-            // You may ignore or handle assignment separately.
-            output.push_back(token);
+            output.push_back(token); // Optional: handle assignment
         }
     }
 
@@ -169,4 +183,87 @@ std::vector<Token> toPostfix(const std::vector<Token>& tokens) {
     }
 
     return output;
+}
+
+#include <regex> // For parsing function name and arity
+
+ASTNode* buildAST(const std::vector<Token>& postfix) {
+    std::stack<ASTNode*> nodeStack;
+
+    for (const Token& token : postfix) {
+        if (token.type == TokenType::NUMBER) {
+            nodeStack.push(new ASTNode(NodeType::NUMBER, token.value));
+        }
+
+        else if (token.type == TokenType::IDENTIFIER) {
+            // Check if token is in the form func@N
+            std::regex funcRegex(R"((\w+)@(\d+))");
+            std::smatch match;
+
+            if (std::regex_match(token.value, match, funcRegex)) {
+                std::string funcName = match[1];
+                int argCount = std::stoi(match[2]);
+
+                if (nodeStack.size() < argCount) {
+                    std::cerr << "Error: Not enough arguments for function '" << funcName << "'\n";
+                    return nullptr;
+                }
+
+                ASTNode* funcNode = new ASTNode(NodeType::FUNCTION, funcName);
+                std::vector<ASTNode*> args;
+
+                for (int i = 0; i < argCount; ++i) {
+                    args.push_back(nodeStack.top());
+                    nodeStack.pop();
+                }
+
+                std::reverse(args.begin(), args.end()); // Maintain argument order
+                funcNode->children = args;
+                nodeStack.push(funcNode);
+            } else {
+                // Regular variable
+                nodeStack.push(new ASTNode(NodeType::VARIABLE, token.value));
+            }
+        }
+
+        else if (isOperator(token.type)) {
+            if (nodeStack.size() < 2) {
+                std::cerr << "Error: Not enough operands for operator '" << token.value << "'\n";
+                return nullptr;
+            }
+
+            ASTNode* right = nodeStack.top(); nodeStack.pop();
+            ASTNode* left  = nodeStack.top(); nodeStack.pop();
+
+            ASTNode* opNode = new ASTNode(NodeType::BINARY_OP, token.value);
+            opNode->children.push_back(left);
+            opNode->children.push_back(right);
+
+            nodeStack.push(opNode);
+        }
+    }
+
+    if (nodeStack.size() != 1) {
+        std::cerr << "Error: Invalid AST. Stack size = " << nodeStack.size() << "\n";
+        return nullptr;
+    }
+
+    return nodeStack.top();
+}
+
+
+void printAST(ASTNode* node, int depth) {
+    if (!node) return;
+    for (int i = 0; i < depth; ++i) std::cout << "  ";
+    std::cout << "- " << node->value << " (" << static_cast<int>(node->type) << ")\n";
+    for (ASTNode* child : node->children)
+        printAST(child, depth + 1);
+}
+
+
+void freeAST(ASTNode* node) {
+    if (!node) return;
+    for (ASTNode* child : node->children)
+        freeAST(child);
+    delete node;
 }

@@ -32,7 +32,31 @@ struct Token{
     }
 };
 
+enum class NodeType{
+    NUMBER,
+    VARIABLE,
+    BINARY_OP,
+    FUNCTION
+};
+
+struct ASTNode {
+    NodeType type;
+    std::string value; // For number, variable name, or function name
+    std::vector<ASTNode*> children; // Left/right for binary ops, args for funcs
+
+    ASTNode(NodeType t, const std::string& val) {
+        type = t;
+        value = val;
+    }
+};
+
+
+
+
 std::vector<Token> tokenize(const std::string& input);
 std::vector<Token> toPostfix(const std::vector<Token>& tokens);
+ASTNode* buildAST(const std::vector<Token>& postfix);
+void printAST(ASTNode* node, int depth = 0);
+void freeAST(ASTNode* node);
 
 #endif
