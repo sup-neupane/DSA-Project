@@ -98,20 +98,18 @@ bool isRightAssociative(TokenType type) {
 std::vector<Token> toPostfix(const std::vector<Token>& tokens) {
     std::vector<Token> output;
     std::vector<Token> opStack;
-
-    std::vector<int> argCountStack; // Tracks function argument counts
+    std::vector<int> argCountStack;
 
     for (size_t i = 0; i < tokens.size(); ++i) {
         const Token& token = tokens[i];
 
         if (token.type == TokenType::NUMBER || token.type == TokenType::IDENTIFIER) {
-            // Function name → push to stack
             if (token.type == TokenType::IDENTIFIER &&
                 i + 1 < tokens.size() && tokens[i + 1].type == TokenType::LPAREN) {
-                opStack.push_back(token);      // Function name
-                argCountStack.push_back(0);    // Start counting args
+                opStack.push_back(token);      // function name
+                argCountStack.push_back(0);    // start counting args
             } else {
-                output.push_back(token);       // Number or variable
+                output.push_back(token);
             }
         }
 
@@ -123,6 +121,37 @@ std::vector<Token> toPostfix(const std::vector<Token>& tokens) {
             if (!argCountStack.empty()) {
                 argCountStack.back() += 1;
             }
+        }
+
+        else if (token.type == TokenType::PLUS || token.type == TokenType::MINUS) {
+            // Detect unary
+            bool isUnary = (i == 0 ||
+                            tokens[i - 1].type == TokenType::LPAREN ||
+                            tokens[i - 1].type == TokenType::COMMA ||
+                            isOperator(tokens[i - 1].type));
+
+            if (isUnary) {
+                // Push new token type for unary plus or minus
+                if (token.type == TokenType::MINUS)
+                    opStack.push_back(Token(TokenType::UMINUS, "u-"));
+                else
+                    opStack.push_back(Token(TokenType::UPLUS, "u+"));
+                continue;
+            }
+
+            // binary plus/minus normal precedence handling
+            while (!opStack.empty() && isOperator(opStack.back().type)) {
+                TokenType top = opStack.back().type;
+                if ((getPrecedence(top) > getPrecedence(token.type)) ||
+                    (getPrecedence(top) == getPrecedence(token.type) &&
+                     !isRightAssociative(token.type))) {
+                    output.push_back(opStack.back());
+                    opStack.pop_back();
+                } else {
+                    break;
+                }
+            }
+            opStack.push_back(token);
         }
 
         else if (isOperator(token.type)) {
@@ -155,15 +184,14 @@ std::vector<Token> toPostfix(const std::vector<Token>& tokens) {
                 return {};
             }
 
-            opStack.pop_back(); // pop LPAREN
+            opStack.pop_back(); // Pop LPAREN
 
-            // If there was a function before LPAREN, pop and annotate
+            // Handle function call
             if (!opStack.empty() && opStack.back().type == TokenType::IDENTIFIER) {
                 std::string funcName = opStack.back().value;
-                int argCount = (argCountStack.empty() ? 0 : argCountStack.back() + 1); // count commas + 1
+                int argCount = (argCountStack.empty() ? 0 : argCountStack.back() + 1);
                 if (!argCountStack.empty()) argCountStack.pop_back();
                 opStack.pop_back();
-
                 output.push_back(Token(TokenType::IDENTIFIER, funcName + "@" + std::to_string(argCount)));
             }
         }
@@ -185,7 +213,6 @@ std::vector<Token> toPostfix(const std::vector<Token>& tokens) {
     return output;
 }
 
-#include <regex> // For parsing function name and arity
 
 ASTNode* buildAST(const std::vector<Token>& postfix) {
     std::stack<ASTNode*> nodeStack;
@@ -196,7 +223,7 @@ ASTNode* buildAST(const std::vector<Token>& postfix) {
         }
 
         else if (token.type == TokenType::IDENTIFIER) {
-            // Check if token is in the form func@N
+            // Handle function calls like func@N
             std::regex funcRegex(R"((\w+)@(\d+))");
             std::smatch match;
 
@@ -204,7 +231,7 @@ ASTNode* buildAST(const std::vector<Token>& postfix) {
                 std::string funcName = match[1];
                 int argCount = std::stoi(match[2]);
 
-                if (nodeStack.size() < argCount) {
+                if (nodeStack.size() < static_cast<size_t>(argCount)) {
                     std::cerr << "Error: Not enough arguments for function '" << funcName << "'\n";
                     return nullptr;
                 }
@@ -217,13 +244,31 @@ ASTNode* buildAST(const std::vector<Token>& postfix) {
                     nodeStack.pop();
                 }
 
-                std::reverse(args.begin(), args.end()); // Maintain argument order
+                std::reverse(args.begin(), args.end()); // Preserve argument order
                 funcNode->children = args;
                 nodeStack.push(funcNode);
-            } else {
+            }
+            else {
                 // Regular variable
                 nodeStack.push(new ASTNode(NodeType::VARIABLE, token.value));
             }
+        }
+
+        else if (token.type == TokenType::UMINUS || token.type == TokenType::UPLUS) {
+            if (nodeStack.empty()) {
+                std::cerr << "Error: Unary operator missing operand.\n";
+                return nullptr;
+            }
+
+            ASTNode* child = nodeStack.top();
+            nodeStack.pop();
+
+            // Use "-" for UMINUS and "+" for UPLUS as node value
+            std::string opSymbol = (token.type == TokenType::UMINUS) ? "-" : "+";
+
+            ASTNode* unaryNode = new ASTNode(NodeType::UNARY_OP, opSymbol);
+            unaryNode->children.push_back(child);
+            nodeStack.push(unaryNode);
         }
 
         else if (isOperator(token.type)) {
@@ -232,8 +277,10 @@ ASTNode* buildAST(const std::vector<Token>& postfix) {
                 return nullptr;
             }
 
-            ASTNode* right = nodeStack.top(); nodeStack.pop();
-            ASTNode* left  = nodeStack.top(); nodeStack.pop();
+            ASTNode* right = nodeStack.top();
+            nodeStack.pop();
+            ASTNode* left = nodeStack.top();
+            nodeStack.pop();
 
             ASTNode* opNode = new ASTNode(NodeType::BINARY_OP, token.value);
             opNode->children.push_back(left);

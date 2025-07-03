@@ -2,14 +2,9 @@
 #include <iostream>
 #include <vector>
 
-int main() {
-    std::string expr = "max(1, 2, 3) + cos(sin(x ^ 2))";
-
+void testExpression(const std::string& expr) {
     std::cout << "=============================\n";
-    std::cout << "      Parsing Expression     \n";
-    std::cout << "=============================\n\n";
-
-    std::cout << "Input Expression:\n" << expr << "\n\n";
+    std::cout << "Expression: " << expr << "\n";
 
     // Tokenize
     std::vector<Token> tokens = tokenize(expr);
@@ -20,20 +15,30 @@ int main() {
     // Build AST
     ASTNode* astRoot = buildAST(postfix);
     if (!astRoot) {
-        std::cerr << "Failed to build AST\n";
-        return 1;
+        std::cerr << "Failed to build AST for expression: " << expr << "\n";
+        return;
     }
 
     // Print AST
-    std::cout << "Parse Tree:\n";
+    std::cout << "AST:\n";
     printAST(astRoot);
 
     // Free AST memory
     freeAST(astRoot);
+    std::cout << "=============================\n\n";
+}
 
-    std::cout << "\n=============================\n";
-    std::cout << "          Done               \n";
-    std::cout << "=============================\n";
+int main() {
+    std::vector<std::string> expressions = {
+        "-x",
+        "-5 + x",
+        "-sin(x)",
+        "max(-1, -2, 3)"
+    };
+
+    for (const auto& expr : expressions) {
+        testExpression(expr);
+    }
 
     return 0;
 }
