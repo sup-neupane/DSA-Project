@@ -18,7 +18,9 @@ enum class TokenType {
     EQUAL,
     COMMA,
     END_OF_INPUT,
-    INVALID
+    INVALID,
+    UMINUS,  
+    UPLUS 
 };
 
 
@@ -36,7 +38,8 @@ enum class NodeType{
     NUMBER,
     VARIABLE,
     BINARY_OP,
-    FUNCTION
+    FUNCTION,
+    UNARY_OP
 };
 
 struct ASTNode {
