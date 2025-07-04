@@ -8,6 +8,8 @@
 double evaluate(ASTNode* node, double x) {
     if (!node) throw std::runtime_error("Null node in AST");
 
+    const double EPSILON = 1e-12;
+
     switch (node->type) {
         case NodeType::NUMBER:
             return std::stod(node->value);
@@ -28,14 +30,28 @@ double evaluate(ASTNode* node, double x) {
         case NodeType::BINARY_OP: {
             double left = evaluate(node->children[0], x);
             double right = evaluate(node->children[1], x);
+
             if (node->value == "+") return left + right;
             if (node->value == "-") return left - right;
             if (node->value == "*") return left * right;
+
             if (node->value == "/") {
-                if (right == 0) throw std::runtime_error("Divide by zero");
+                if (std::fabs(right) < EPSILON)
+                    throw std::runtime_error("Divide by zero or near zero");
                 return left / right;
             }
-            if (node->value == "^") return std::pow(left, right);
+
+            if (node->value == "^") {
+                // Handle 0^negative or negative^fractional cases carefully
+                if (left == 0 && right < 0) {
+                    throw std::runtime_error("Zero cannot be raised to a negative power");
+                }
+                if (left < 0 && std::floor(right) != right) {
+                    throw std::runtime_error("Negative base with non-integer exponent is undefined");
+                }
+                return std::pow(left, right);
+            }
+
             throw std::runtime_error("Unknown binary operator: " + node->value);
         }
 
@@ -49,10 +65,23 @@ double evaluate(ASTNode* node, double x) {
 
             if (func == "sin") return std::sin(args[0]);
             if (func == "cos") return std::cos(args[0]);
-            if (func == "tan") return std::tan(args[0]);
-            if (func == "sqrt") return std::sqrt(args[0]);
+            if (func == "tan") {
+                // Check if tan(arg) is near undefined (cos(arg) near zero)
+                if (std::fabs(std::cos(args[0])) < EPSILON)
+                    throw std::runtime_error("tan undefined near odd multiples of pi/2");
+                return std::tan(args[0]);
+            }
+            if (func == "sqrt") {
+                if (args[0] < 0)
+                    throw std::runtime_error("sqrt of negative number");
+                return std::sqrt(args[0]);
+            }
             if (func == "abs") return std::fabs(args[0]);
-            if (func == "log") return std::log(args[0]); // natural log
+            if (func == "log") {
+                if (args[0] <= 0)
+                    throw std::runtime_error("log of non-positive number");
+                return std::log(args[0]); // natural log
+            }
             if (func == "max") {
                 if (args.empty()) throw std::runtime_error("max requires at least 1 argument");
                 return *std::max_element(args.begin(), args.end());
@@ -63,7 +92,16 @@ double evaluate(ASTNode* node, double x) {
             }
             if (func == "pow") {
                 if (args.size() != 2) throw std::runtime_error("pow requires 2 arguments");
-                return std::pow(args[0], args[1]);
+
+                double base = args[0], exponent = args[1];
+
+                if (base == 0 && exponent < 0) {
+                    throw std::runtime_error("Zero cannot be raised to a negative power");
+                }
+                if (base < 0 && std::floor(exponent) != exponent) {
+                    throw std::runtime_error("Negative base with non-integer exponent is undefined");
+                }
+                return std::pow(base, exponent);
             }
 
             throw std::runtime_error("Unknown function: " + func);
