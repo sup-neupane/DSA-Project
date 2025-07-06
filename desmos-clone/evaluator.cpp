@@ -14,11 +14,17 @@ double evaluate(ASTNode* node, double x) {
         case NodeType::NUMBER:
             return std::stod(node->value);
 
-        case NodeType::VARIABLE:
-            if (node->value == "x") return x;
-            if (node->value == "pi") return M_PI;
-            if (node->value == "e") return M_E;
+        case NodeType::VARIABLE: {
+            std::string var = node->value;
+            std::transform(var.begin(), var.end(), var.begin(), ::tolower);
+            if (var == "x") return x;
+            if (var == "pi") return M_PI;
+            if (var == "e") return M_E;
+            if (var == "phi") return 1.61803398875; // golden ratio
+            if (var == "tau") return 2 * M_PI;
+            if (var == "gamma") return 0.5772156649; // Euler–Mascheroni constant
             throw std::runtime_error("Unknown variable: " + node->value);
+        }
 
         case NodeType::UNARY_OP: {
             double child = evaluate(node->children[0], x);
@@ -42,13 +48,10 @@ double evaluate(ASTNode* node, double x) {
             }
 
             if (node->value == "^") {
-                // Handle 0^negative or negative^fractional cases carefully
-                if (left == 0 && right < 0) {
+                if (left == 0 && right < 0)
                     throw std::runtime_error("Zero cannot be raised to a negative power");
-                }
-                if (left < 0 && std::floor(right) != right) {
+                if (left < 0 && std::floor(right) != right)
                     throw std::runtime_error("Negative base with non-integer exponent is undefined");
-                }
                 return std::pow(left, right);
             }
 
@@ -66,7 +69,6 @@ double evaluate(ASTNode* node, double x) {
             if (func == "sin") return std::sin(args[0]);
             if (func == "cos") return std::cos(args[0]);
             if (func == "tan") {
-                // Check if tan(arg) is near undefined (cos(arg) near zero)
                 if (std::fabs(std::cos(args[0])) < EPSILON)
                     throw std::runtime_error("tan undefined near odd multiples of pi/2");
                 return std::tan(args[0]);
@@ -80,7 +82,7 @@ double evaluate(ASTNode* node, double x) {
             if (func == "log") {
                 if (args[0] <= 0)
                     throw std::runtime_error("log of non-positive number");
-                return std::log(args[0]); // natural log
+                return std::log(args[0]);
             }
             if (func == "max") {
                 if (args.empty()) throw std::runtime_error("max requires at least 1 argument");
@@ -92,17 +94,17 @@ double evaluate(ASTNode* node, double x) {
             }
             if (func == "pow") {
                 if (args.size() != 2) throw std::runtime_error("pow requires 2 arguments");
-
                 double base = args[0], exponent = args[1];
-
-                if (base == 0 && exponent < 0) {
+                if (base == 0 && exponent < 0)
                     throw std::runtime_error("Zero cannot be raised to a negative power");
-                }
-                if (base < 0 && std::floor(exponent) != exponent) {
+                if (base < 0 && std::floor(exponent) != exponent)
                     throw std::runtime_error("Negative base with non-integer exponent is undefined");
-                }
                 return std::pow(base, exponent);
             }
+            if (func == "exp") return std::exp(args[0]);
+            if (func == "floor") return std::floor(args[0]);
+            if (func == "ceil") return std::ceil(args[0]);
+            if (func == "round") return std::round(args[0]);
 
             throw std::runtime_error("Unknown function: " + func);
         }

@@ -9,27 +9,16 @@ void testExpression(const std::string& expr, double xVal) {
     std::cout << "Expression: " << expr << "\n";
 
     auto tokens = tokenize(expr);
-    std::cout << "Tokens: ";
-    for (const auto& t : tokens) std::cout << "[" << t.value << "] ";
-    std::cout << "\n";
-
     auto postfix = toPostfix(tokens);
-    std::cout << "Postfix: ";
-    for (const auto& t : postfix) std::cout << t.value << " ";
-    std::cout << "\n";
-
     auto ast = buildAST(postfix);
-    if (ast) {
-        std::cout << "Parse Tree:\n";
-        printAST(ast);
 
+    if (ast) {
         try {
             double result = evaluate(ast, xVal);
             std::cout << "Evaluated Result (x = " << xVal << "): " << result << "\n";
         } catch (const std::exception& e) {
             std::cerr << "Evaluation error: " << e.what() << "\n";
         }
-
         freeAST(ast);
     } else {
         std::cerr << "Failed to build AST.\n";
@@ -39,9 +28,22 @@ void testExpression(const std::string& expr, double xVal) {
 int main() {
     double xVal = 2;
 
-    testExpression("2x + 3sin(x)", xVal);
-    testExpression("x(x + 1)", xVal);
-    testExpression("2pi + 3e", xVal);
+    // Test new constants
+    testExpression("phi + tau + gamma", xVal);
+
+    // Test new unary functions
+    testExpression("exp(1)", xVal);
+    testExpression("floor(3.7)", xVal);
+    testExpression("ceil(3.3)", xVal);
+    testExpression("round(3.5)", xVal);
+
+    // Test error handling
+    testExpression("sqrt(-4)", xVal);
+    testExpression("log(0)", xVal);
+    testExpression("1 / 0", xVal);
+    testExpression("pow(0, -1)", xVal);
+    testExpression("unknownVar + 1", xVal);
+    testExpression("unknownFunc(1)", xVal);
 
     return 0;
 }
