@@ -11,12 +11,24 @@ std::vector<Token> tokenize(const std::string& input) {
     std::vector<Token> tokens;
     size_t i = 0;
 
+    auto shouldInsertMul = [](const Token& prev, char next) {
+        if (prev.type == TokenType::NUMBER || prev.type == TokenType::IDENTIFIER || prev.type == TokenType::RPAREN) {
+            return std::isdigit(next) || std::isalpha(next) || next == '(';
+        }
+        return false;
+    };
+
     while (i < input.size()) {
         char ch = input[i];
 
         if (std::isspace(ch)) {
             ++i;
             continue;
+        }
+
+        // Check for implicit multiplication
+        if (!tokens.empty() && shouldInsertMul(tokens.back(), ch)) {
+            tokens.emplace_back(TokenType::STAR, "*");
         }
 
         if (std::isdigit(ch) || (ch == '.' && i + 1 < input.size() && std::isdigit(input[i + 1]))) {
