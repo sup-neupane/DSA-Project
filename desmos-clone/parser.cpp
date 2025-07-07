@@ -28,8 +28,12 @@ std::vector<Token> tokenize(const std::string& input) {
 
         // Check for implicit multiplication
         if (!tokens.empty() && shouldInsertMul(tokens.back(), ch)) {
-            tokens.emplace_back(TokenType::STAR, "*");
+            // If prev token is IDENTIFIER and next char is '(' -> don't insert '*'
+            if (!(tokens.back().type == TokenType::IDENTIFIER && ch == '(')) {
+                tokens.emplace_back(TokenType::STAR, "*");
+            }
         }
+
 
         if (std::isdigit(ch) || (ch == '.' && i + 1 < input.size() && std::isdigit(input[i + 1]))) {
             std::string numStr;
@@ -118,32 +122,33 @@ std::vector<Token> toPostfix(const std::vector<Token>& tokens) {
         if (token.type == TokenType::NUMBER || token.type == TokenType::IDENTIFIER) {
             if (token.type == TokenType::IDENTIFIER &&
                 i + 1 < tokens.size() && tokens[i + 1].type == TokenType::LPAREN) {
-                opStack.push_back(token);      // function name
-                argCountStack.push_back(0);    // start counting args
+                // Function call: push function name and start arg count
+                opStack.push_back(token);
+                argCountStack.push_back(0);
             } else {
                 output.push_back(token);
             }
         }
 
         else if (token.type == TokenType::COMMA) {
+            // Pop until LPAREN
             while (!opStack.empty() && opStack.back().type != TokenType::LPAREN) {
                 output.push_back(opStack.back());
                 opStack.pop_back();
             }
             if (!argCountStack.empty()) {
-                argCountStack.back() += 1;
+                argCountStack.back() += 1;  // Increment arg count on each comma
             }
         }
 
         else if (token.type == TokenType::PLUS || token.type == TokenType::MINUS) {
-            // Detect unary
+            // Detect unary operator
             bool isUnary = (i == 0 ||
                             tokens[i - 1].type == TokenType::LPAREN ||
                             tokens[i - 1].type == TokenType::COMMA ||
                             isOperator(tokens[i - 1].type));
 
             if (isUnary) {
-                // Push new token type for unary plus or minus
                 if (token.type == TokenType::MINUS)
                     opStack.push_back(Token(TokenType::UMINUS, "u-"));
                 else
@@ -151,12 +156,11 @@ std::vector<Token> toPostfix(const std::vector<Token>& tokens) {
                 continue;
             }
 
-            // binary plus/minus normal precedence handling
+            // binary operator precedence
             while (!opStack.empty() && isOperator(opStack.back().type)) {
                 TokenType top = opStack.back().type;
                 if ((getPrecedence(top) > getPrecedence(token.type)) ||
-                    (getPrecedence(top) == getPrecedence(token.type) &&
-                     !isRightAssociative(token.type))) {
+                    (getPrecedence(top) == getPrecedence(token.type) && !isRightAssociative(token.type))) {
                     output.push_back(opStack.back());
                     opStack.pop_back();
                 } else {
@@ -170,8 +174,7 @@ std::vector<Token> toPostfix(const std::vector<Token>& tokens) {
             while (!opStack.empty() && isOperator(opStack.back().type)) {
                 TokenType top = opStack.back().type;
                 if ((getPrecedence(top) > getPrecedence(token.type)) ||
-                    (getPrecedence(top) == getPrecedence(token.type) &&
-                     !isRightAssociative(token.type))) {
+                    (getPrecedence(top) == getPrecedence(token.type) && !isRightAssociative(token.type))) {
                     output.push_back(opStack.back());
                     opStack.pop_back();
                 } else {
@@ -186,6 +189,7 @@ std::vector<Token> toPostfix(const std::vector<Token>& tokens) {
         }
 
         else if (token.type == TokenType::RPAREN) {
+            // Pop until LPAREN
             while (!opStack.empty() && opStack.back().type != TokenType::LPAREN) {
                 output.push_back(opStack.back());
                 opStack.pop_back();
@@ -198,11 +202,21 @@ std::vector<Token> toPostfix(const std::vector<Token>& tokens) {
 
             opStack.pop_back(); // Pop LPAREN
 
-            // Handle function call
+            // If function on top, pop and append with arg count
             if (!opStack.empty() && opStack.back().type == TokenType::IDENTIFIER) {
                 std::string funcName = opStack.back().value;
-                int argCount = (argCountStack.empty() ? 0 : argCountStack.back() + 1);
-                if (!argCountStack.empty()) argCountStack.pop_back();
+
+                int argCount = 0;
+                if (!argCountStack.empty()) {
+                    argCount = argCountStack.back();
+                    argCountStack.pop_back();
+
+                    // If token before RPAREN is not LPAREN, function has at least one argument
+                    if (i > 0 && tokens[i - 1].type != TokenType::LPAREN) {
+                        argCount += 1;
+                    }
+                }
+
                 opStack.pop_back();
                 output.push_back(Token(TokenType::IDENTIFIER, funcName + "@" + std::to_string(argCount)));
             }
@@ -224,6 +238,7 @@ std::vector<Token> toPostfix(const std::vector<Token>& tokens) {
 
     return output;
 }
+
 
 
 ASTNode* buildAST(const std::vector<Token>& postfix) {

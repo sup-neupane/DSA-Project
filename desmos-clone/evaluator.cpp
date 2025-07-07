@@ -5,6 +5,11 @@
 #include <stdexcept>
 #include <algorithm>
 
+// Helper to convert degrees to radians
+inline double deg2rad(double degrees) {
+    return degrees * M_PI / 180.0;
+}
+
 double evaluate(ASTNode* node, double x) {
     if (!node) throw std::runtime_error("Null node in AST");
 
@@ -20,9 +25,9 @@ double evaluate(ASTNode* node, double x) {
             if (var == "x") return x;
             if (var == "pi") return M_PI;
             if (var == "e") return M_E;
-            if (var == "phi") return 1.61803398875; // golden ratio
             if (var == "tau") return 2 * M_PI;
-            if (var == "gamma") return 0.5772156649; // Euler–Mascheroni constant
+            if (var == "phi") return 1.61803398875;
+            if (var == "gamma") return 0.5772156649;
             throw std::runtime_error("Unknown variable: " + node->value);
         }
 
@@ -40,18 +45,16 @@ double evaluate(ASTNode* node, double x) {
             if (node->value == "+") return left + right;
             if (node->value == "-") return left - right;
             if (node->value == "*") return left * right;
-
             if (node->value == "/") {
                 if (std::fabs(right) < EPSILON)
-                    throw std::runtime_error("Divide by zero or near zero");
+                    throw std::runtime_error("Divide by zero");
                 return left / right;
             }
-
             if (node->value == "^") {
                 if (left == 0 && right < 0)
-                    throw std::runtime_error("Zero cannot be raised to a negative power");
+                    throw std::runtime_error("Zero to negative power");
                 if (left < 0 && std::floor(right) != right)
-                    throw std::runtime_error("Negative base with non-integer exponent is undefined");
+                    throw std::runtime_error("Negative base with non-integer exponent");
                 return std::pow(left, right);
             }
 
@@ -66,45 +69,85 @@ double evaluate(ASTNode* node, double x) {
                 args.push_back(evaluate(arg, x));
             }
 
-            if (func == "sin") return std::sin(args[0]);
-            if (func == "cos") return std::cos(args[0]);
+            // ✅ Single-arg functions (trig in degrees)
+            if (func == "sin") return std::sin(deg2rad(args[0]));
+            if (func == "cos") return std::cos(deg2rad(args[0]));
             if (func == "tan") {
-                if (std::fabs(std::cos(args[0])) < EPSILON)
-                    throw std::runtime_error("tan undefined near odd multiples of pi/2");
-                return std::tan(args[0]);
+                double angle = std::fmod(args[0], 180.0);
+                if (std::fabs(angle - 90.0) < EPSILON)
+                    throw std::runtime_error("tan undefined at 90 + k*180");
+                return std::tan(deg2rad(args[0]));
             }
+            if (func == "cot") {
+                double angle = std::fmod(args[0], 180.0);
+                if (std::fabs(angle) < EPSILON)
+                    throw std::runtime_error("cot undefined at k*180");
+                return 1.0 / std::tan(deg2rad(args[0]));
+            }
+            if (func == "sec") {
+                if (std::fabs(std::cos(deg2rad(args[0]))) < EPSILON)
+                    throw std::runtime_error("sec undefined at 90 + k*180");
+                return 1.0 / std::cos(deg2rad(args[0]));
+            }
+            if (func == "csc") {
+                if (std::fabs(std::sin(deg2rad(args[0]))) < EPSILON)
+                    throw std::runtime_error("csc undefined at k*180");
+                return 1.0 / std::sin(deg2rad(args[0]));
+            }
+
+            // ✅ Other single-arg
             if (func == "sqrt") {
-                if (args[0] < 0)
-                    throw std::runtime_error("sqrt of negative number");
+                if (args[0] < 0) throw std::runtime_error("sqrt of negative");
                 return std::sqrt(args[0]);
             }
-            if (func == "abs") return std::fabs(args[0]);
-            if (func == "log") {
-                if (args[0] <= 0)
-                    throw std::runtime_error("log of non-positive number");
-                return std::log(args[0]);
-            }
-            if (func == "max") {
-                if (args.empty()) throw std::runtime_error("max requires at least 1 argument");
-                return *std::max_element(args.begin(), args.end());
-            }
-            if (func == "min") {
-                if (args.empty()) throw std::runtime_error("min requires at least 1 argument");
-                return *std::min_element(args.begin(), args.end());
-            }
-            if (func == "pow") {
-                if (args.size() != 2) throw std::runtime_error("pow requires 2 arguments");
-                double base = args[0], exponent = args[1];
-                if (base == 0 && exponent < 0)
-                    throw std::runtime_error("Zero cannot be raised to a negative power");
-                if (base < 0 && std::floor(exponent) != exponent)
-                    throw std::runtime_error("Negative base with non-integer exponent is undefined");
-                return std::pow(base, exponent);
-            }
-            if (func == "exp") return std::exp(args[0]);
+            if (func == "abs" || func == "mod") return std::fabs(args[0]);
+            if (func == "sign") return (args[0] > 0) - (args[0] < 0);
             if (func == "floor") return std::floor(args[0]);
             if (func == "ceil") return std::ceil(args[0]);
             if (func == "round") return std::round(args[0]);
+            if (func == "log" || func == "ln") {
+                if (args[0] <= 0) throw std::runtime_error("log of non-positive");
+                return std::log(args[0]);
+            }
+            if (func == "log10") {
+                if (args[0] <= 0) throw std::runtime_error("log10 of non-positive");
+                return std::log10(args[0]);
+            }
+            if (func == "log2") {
+                if (args[0] <= 0) throw std::runtime_error("log2 of non-positive");
+                return std::log2(args[0]);
+            }
+            if (func == "exp") return std::exp(args[0]);
+
+            // ✅ Two-arg functions
+            if (func == "pow") {
+                if (args.size() != 2) throw std::runtime_error("pow requires 2 args");
+                return std::pow(args[0], args[1]);
+            }
+            if (func == "mod" && args.size() == 2) {
+                if (std::fabs(args[1]) < EPSILON)
+                    throw std::runtime_error("mod by zero");
+                return std::fmod(args[0], args[1]);
+            }
+            if (func == "log" && args.size() == 2) {
+                if (args[0] <= 0 || args[1] <= 0 || args[1] == 1)
+                    throw std::runtime_error("invalid log base");
+                return std::log(args[0]) / std::log(args[1]);
+            }
+            if (func == "atan2") {
+                if (args.size() != 2) throw std::runtime_error("atan2 needs 2 args");
+                return std::atan2(args[0], args[1]);
+            }
+
+            // ✅ Variadic
+            if (func == "max") {
+                if (args.empty()) throw std::runtime_error("max needs args");
+                return *std::max_element(args.begin(), args.end());
+            }
+            if (func == "min") {
+                if (args.empty()) throw std::runtime_error("min needs args");
+                return *std::min_element(args.begin(), args.end());
+            }
 
             throw std::runtime_error("Unknown function: " + func);
         }
