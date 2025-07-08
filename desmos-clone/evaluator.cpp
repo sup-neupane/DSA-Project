@@ -62,38 +62,39 @@ double evaluate(ASTNode* node, double x) {
         }
 
         case NodeType::FUNCTION: {
-            std::string func = node->value;
-            std::transform(func.begin(), func.end(), func.begin(), ::tolower);
-            std::vector<double> args;
-            for (ASTNode* arg : node->children) {
-                args.push_back(evaluate(arg, x));
-            }
+        std::string func = node->value;
+        std::transform(func.begin(), func.end(), func.begin(), ::tolower);
+        std::vector<double> args;
+        for (ASTNode* arg : node->children) {
+            args.push_back(evaluate(arg, x));
+        }
 
-            // ✅ Single-arg functions (trig in degrees)
-            if (func == "sin") return std::sin(deg2rad(args[0]));
-            if (func == "cos") return std::cos(deg2rad(args[0]));
-            if (func == "tan") {
-                double angle = std::fmod(args[0], 180.0);
-                if (std::fabs(angle - 90.0) < EPSILON)
-                    throw std::runtime_error("tan undefined at 90 + k*180");
-                return std::tan(deg2rad(args[0]));
-            }
-            if (func == "cot") {
-                double angle = std::fmod(args[0], 180.0);
-                if (std::fabs(angle) < EPSILON)
-                    throw std::runtime_error("cot undefined at k*180");
-                return 1.0 / std::tan(deg2rad(args[0]));
-            }
-            if (func == "sec") {
-                if (std::fabs(std::cos(deg2rad(args[0]))) < EPSILON)
-                    throw std::runtime_error("sec undefined at 90 + k*180");
-                return 1.0 / std::cos(deg2rad(args[0]));
-            }
-            if (func == "csc") {
-                if (std::fabs(std::sin(deg2rad(args[0]))) < EPSILON)
-                    throw std::runtime_error("csc undefined at k*180");
-                return 1.0 / std::sin(deg2rad(args[0]));
-            }
+        // Trig functions now expect radians input directly
+        if (func == "sin") return std::sin(args[0]);
+        if (func == "cos") return std::cos(args[0]);
+        if (func == "tan") {
+            double angle_mod = std::fmod(args[0] * 180.0 / M_PI, 180.0); // optional to keep undefined check in degrees
+            if (std::fabs(angle_mod - 90.0) < EPSILON)
+                throw std::runtime_error("tan undefined at 90 + k*180 degrees");
+            return std::tan(args[0]);
+        }
+        if (func == "cot") {
+            double angle_mod = std::fmod(args[0] * 180.0 / M_PI, 180.0);
+            if (std::fabs(angle_mod) < EPSILON)
+                throw std::runtime_error("cot undefined at k*180 degrees");
+            return 1.0 / std::tan(args[0]);
+        }
+        if (func == "sec") {
+            if (std::fabs(std::cos(args[0])) < EPSILON)
+                throw std::runtime_error("sec undefined at 90 + k*180 degrees");
+            return 1.0 / std::cos(args[0]);
+        }
+        if (func == "csc") {
+            if (std::fabs(std::sin(args[0])) < EPSILON)
+                throw std::runtime_error("csc undefined at k*180 degrees");
+            return 1.0 / std::sin(args[0]);
+        }
+
 
             // ✅ Other single-arg
             if (func == "sqrt") {
