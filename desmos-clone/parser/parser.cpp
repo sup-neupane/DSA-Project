@@ -131,10 +131,13 @@ std::vector<Token> toPostfix(const std::vector<Token>& tokens) {
         }
 
         else if (token.type == TokenType::COMMA) {
-            // Pop until LPAREN
             while (!opStack.empty() && opStack.back().type != TokenType::LPAREN) {
                 output.push_back(opStack.back());
                 opStack.pop_back();
+            }
+            if (opStack.empty()) {
+                std::cerr << "Error: Misplaced comma or missing '(' before comma.\n";
+                return {};
             }
             if (!argCountStack.empty()) {
                 argCountStack.back() += 1;  // Increment arg count on each comma
